@@ -15,7 +15,7 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
-    
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -28,4 +28,8 @@ android {
     buildFeatures {
         buildConfig = true
     }
+}
+
+dependencies {
+    implementation("com.github.msnilsen:openwakeword-android:0.1.0")
 }
