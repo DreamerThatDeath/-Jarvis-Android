@@ -27,6 +27,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -35,7 +36,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
 import java.util.concurrent.Executors
-import android.widget.Toast
 
 class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
@@ -198,14 +198,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
 
         composer.addView(input, LinearLayout.LayoutParams(0, dp(48), 1f))
-        composer.addView(
-            micButton,
-            LinearLayout.LayoutParams(dp(44), dp(48))
-        )
-        composer.addView(
-            sendButton,
-            LinearLayout.LayoutParams(dp(48), dp(48))
-        )
+        composer.addView(micButton, LinearLayout.LayoutParams(dp(44), dp(48)))
+        composer.addView(sendButton, LinearLayout.LayoutParams(dp(48), dp(48)))
 
         root.addView(
             composer,
@@ -226,7 +220,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             background = rounded(panel, 12)
             setOnClickListener {
                 speakReplies = !speakReplies
-                text = if (speakReplies) "🔊 Suara: ON" else "🔇 Suara: OFF"
+                text = if (speakReplies) {
+                    "🔊 Suara: ON"
+                } else {
+                    "🔇 Suara: OFF"
+                }
+
                 if (!speakReplies) tts?.stop()
             }
         }
@@ -274,34 +273,38 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         status.text = "●  JARVIS SEDANG BERPIKIR..."
         status.setTextColor(Color.rgb(255, 205, 90))
 
-        addMessage("JARVIS", "Sedang memproses pesan...", false, true)
+        addMessage(
+            "JARVIS",
+            "Sedang memproses pesan...",
+            false,
+            true
+        )
 
         executor.execute {
-            val answer: String
-
-            try {
+            val answer: String = try {
                 val connection =
-                    (URL(apiUrl).openConnection() as HttpURLConnection).apply {
-                        requestMethod = "POST"
-                        connectTimeout = 20000
-                        readTimeout = 30000
-                        doOutput = true
-                        setRequestProperty(
-                            "Content-Type",
-                            "application/json; charset=UTF-8"
-                        )
-                        setRequestProperty("Accept", "application/json")
-                    }
-
-                val payload = JSONObject()
-                    .put("message", message)
-                    .put("mode", "ramah")
-                    .put("language", "id")
-
-                val code: Int
-                val response: String
+                    URL(apiUrl).openConnection() as HttpURLConnection
 
                 try {
+                    connection.requestMethod = "POST"
+                    connection.connectTimeout = 20000
+                    connection.readTimeout = 30000
+                    connection.doOutput = true
+
+                    connection.setRequestProperty(
+                        "Content-Type",
+                        "application/json; charset=UTF-8"
+                    )
+                    connection.setRequestProperty(
+                        "Accept",
+                        "application/json"
+                    )
+
+                    val payload = JSONObject()
+                        .put("message", message)
+                        .put("mode", "ramah")
+                        .put("language", "id")
+
                     OutputStreamWriter(
                         connection.outputStream,
                         Charsets.UTF_8
@@ -309,7 +312,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         it.write(payload.toString())
                     }
 
-                    code = connection.responseCode
+                    val code = connection.responseCode
 
                     val stream = if (code in 200..299) {
                         connection.inputStream
@@ -317,51 +320,41 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         connection.errorStream
                     }
 
-                    response = if (stream != null) {
+                    val response = if (stream != null) {
                         BufferedReader(
                             InputStreamReader(stream, Charsets.UTF_8)
-                        ).use { it.readText() }
+                        ).use {
+                            it.readText()
+                        }
                     } else {
                         ""
                     }
+
+                    val json = try {
+                        JSONObject(response)
+                    } catch (_: Exception) {
+                        JSONObject()
+                    }
+
+                    val reply = json.optString("reply", "")
+
+                    if (code !in 200..299 || reply.isBlank()) {
+                        val detail = json.optString("error", "")
+                        throw Exception(
+                            detail.ifBlank {
+                                "Server merespons dengan kode $code"
+                            }
+                        )
+                    }
+
+                    reply
                 } finally {
                     connection.disconnect()
                 }
-
-                val json = try {
-                    JSONObject(response)
-                } catch (_: Exception) {
-                    JSONObject()
-                }
-
-                val reply = json.optString("reply", "")
-
-                if (code !in 200..299 || reply.isBlank()) {
-                    val detail = json.optString("error", "")
-                    throw Exception(
-                        detail.ifBlank {
-                            "Server merespons dengan kode $code"
-                        }
-                    )
-                }
-
-                reply
             } catch (e: Exception) {
                 "Jarvis belum bisa terhubung ke AI. " +
                     "Periksa koneksi internet dan backend Gemini kamu. " +
                     "Detail: ${e.message ?: "koneksi gagal"}"
-            }.also {
-                // Simpan hasil untuk ditampilkan di UI.
-            }
-
-            val finalAnswer = try {
-                val connection =
-                    (URL(apiUrl).openConnection() as HttpURLConnection)
-                connection.disconnect()
-                // Jawaban sebenarnya ditangani di blok request di atas.
-                ""
-            } catch (_: Exception) {
-                ""
             }
 
             runOnUiThread {
@@ -462,6 +455,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
+
                 override fun onEndOfSpeech() {
                     listening = false
                     micButton.text = "🎙"
@@ -472,6 +466,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     micButton.text = "🎙"
                     status.text = "●  JARVIS SYSTEM"
                     status.setTextColor(cyan)
+
                     Toast.makeText(
                         this@MainActivity,
                         "Suara tidak terdeteksi. Coba lagi.",
