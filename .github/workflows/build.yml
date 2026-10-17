@@ -32,10 +32,16 @@ jobs:
       - name: Check AndroidManifest XML
         run: |
           python3 - <<'PY'
+          from pathlib import Path
           import xml.etree.ElementTree as ET
-          ET.parse("app/src/main/AndroidManifest.xml")
+
+          path = Path("app/src/main/AndroidManifest.xml")
+          content = path.read_text(encoding="utf-8-sig").lstrip()
+          path.write_text(content, encoding="utf-8")
+          ET.parse(path)
           print("AndroidManifest.xml valid")
           PY
+
 
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace --info
