@@ -433,7 +433,7 @@ class MainActivity : Activity() {
 
             canvas.save()
             canvas.rotate(-t * 35f, cx, cy)
-            paint.strokeWidth = dp(1f).toFloat()
+            paint.strokeWidth = dp(2).toFloat()
             paint.color = Color.argb(150, 50, 215, 255)
             bounds.set(cx - dp(68), cy - dp(68),
                 cx + dp(68), cy + dp(68))
@@ -462,7 +462,7 @@ class MainActivity : Activity() {
 
             // Fine luminous outline
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = dp(1.5f).toFloat()
+            paint.strokeWidth = dp(2).toFloat()
             paint.color = Color.argb(220, 125, 245, 255)
             canvas.drawCircle(cx, cy, radius, paint)
 
