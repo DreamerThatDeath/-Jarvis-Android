@@ -27,6 +27,17 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.util.concurrent.Executors
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.RecognitionListener
+import android.speech.tts.TextToSpeech
+import android.content.Context
+import android.widget.Toast
+import java.util.Locale
 
 class MainActivity : Activity() {
 
