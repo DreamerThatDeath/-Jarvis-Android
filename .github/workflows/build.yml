@@ -29,6 +29,14 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Check AndroidManifest XML
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          ET.parse("app/src/main/AndroidManifest.xml")
+          print("AndroidManifest.xml valid")
+          PY
+
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace --info
         
