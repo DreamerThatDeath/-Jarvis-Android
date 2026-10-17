@@ -38,6 +38,10 @@ import android.speech.tts.TextToSpeech
 import android.content.Context
 import android.widget.Toast
 import java.util.Locale
+import android.content.pm.PackageManager
+import android.Manifest
+import android.content.Intent
+import android.os.Build
 
 class MainActivity : Activity() {
 
