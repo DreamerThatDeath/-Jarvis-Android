@@ -379,8 +379,13 @@ class MainActivity : Activity() {
         }
     }
 
+    
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
+
+    private fun dp(value: Float): Float =
+        value * resources.displayMetrics.density
+
 
     inner class OrbView : View(this@MainActivity) {
 
