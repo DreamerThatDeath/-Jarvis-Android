@@ -1,17 +1,24 @@
 
 package com.dreamerthatdeath.jarvis
 
+import android.Manifest
 import android.app.Activity
-import android.os.Bundle
-import android.os.SystemClock
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
 import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.os.SystemClock
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -21,29 +28,15 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
-import java.util.concurrent.Executors
-import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.speech.RecognitionListener
-import android.speech.tts.TextToSpeech
-import android.content.Context
-import android.widget.Toast
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
-import android.content.pm.PackageManager
-import android.Manifest
-import android.content.Intent
-import android.os.Build
+import java.util.concurrent.Executors
 
-class MainActivity : Activity() {
+class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private val bg = Color.rgb(5, 9, 18)
     private val panel = Color.rgb(14, 23, 38)
@@ -60,12 +53,22 @@ class MainActivity : Activity() {
     private lateinit var sendButton: Button
     private lateinit var scroll: ScrollView
     private lateinit var status: TextView
+    private lateinit var micButton: Button
+    private lateinit var speakButton: Button
+
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
+    private var speakReplies = true
+    private var listening = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         window.statusBarColor = bg
         window.navigationBarColor = bg
+
+        tts = TextToSpeech(this, this)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -96,19 +99,11 @@ class MainActivity : Activity() {
 
         header.addView(brand)
         header.addView(version)
-        root.addView(
-            header,
-            LinearLayout.LayoutParams(
-                -1, dp(42)
-            )
-        )
+        root.addView(header, LinearLayout.LayoutParams(-1, dp(42)))
 
-        val orb = OrbView()
         root.addView(
-            orb,
-            LinearLayout.LayoutParams(
-                dp(220), dp(200)
-            ).apply {
+            OrbView(),
+            LinearLayout.LayoutParams(dp(220), dp(200)).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
                 topMargin = dp(2)
             }
@@ -121,10 +116,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setTextColor(cyan)
         }
-        root.addView(
-            status,
-            LinearLayout.LayoutParams(-1, dp(25))
-        )
+        root.addView(status, LinearLayout.LayoutParams(-1, dp(25)))
 
         val caption = TextView(this).apply {
             text = "Your personal AI"
@@ -132,10 +124,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(135, 159, 185))
         }
-        root.addView(
-            caption,
-            LinearLayout.LayoutParams(-1, dp(26))
-        )
+        root.addView(caption, LinearLayout.LayoutParams(-1, dp(26)))
 
         val divider = View(this).apply {
             setBackgroundColor(Color.rgb(29, 58, 79))
@@ -148,21 +137,14 @@ class MainActivity : Activity() {
             }
         )
 
-        scroll = ScrollView(this).apply {
-            isFillViewport = false
-        }
+        scroll = ScrollView(this)
 
         messages = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
 
         scroll.addView(messages)
-        root.addView(
-            scroll,
-            LinearLayout.LayoutParams(
-                -1, 0, 1f
-            )
-        )
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
         addMessage(
             "JARVIS",
@@ -188,6 +170,19 @@ class MainActivity : Activity() {
             background = null
         }
 
+        micButton = Button(this).apply {
+            text = "🎙"
+            textSize = 17f
+            setTextColor(cyan)
+            background = rounded(panel, 18)
+            setPadding(0, 0, 0, 0)
+            minWidth = 0
+            minimumWidth = 0
+            minHeight = 0
+            minimumHeight = 0
+            setOnClickListener { toggleListening() }
+        }
+
         sendButton = Button(this).apply {
             text = "➤"
             textSize = 20f
@@ -201,9 +196,10 @@ class MainActivity : Activity() {
             setOnClickListener { sendMessage() }
         }
 
+        composer.addView(input, LinearLayout.LayoutParams(0, dp(48), 1f))
         composer.addView(
-            input,
-            LinearLayout.LayoutParams(0, dp(48), 1f)
+            micButton,
+            LinearLayout.LayoutParams(dp(44), dp(48))
         )
         composer.addView(
             sendButton,
@@ -217,6 +213,31 @@ class MainActivity : Activity() {
             }
         )
 
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+
+        speakButton = Button(this).apply {
+            text = "🔊 Suara: ON"
+            textSize = 11f
+            setTextColor(cyan)
+            background = rounded(panel, 12)
+            setOnClickListener {
+                speakReplies = !speakReplies
+                text = if (speakReplies) "🔊 Suara: ON" else "🔇 Suara: OFF"
+                if (!speakReplies) tts?.stop()
+            }
+        }
+
+        controls.addView(
+            speakButton,
+            LinearLayout.LayoutParams(-2, dp(40)).apply {
+                topMargin = dp(5)
+            }
+        )
+        root.addView(controls)
+
         val footer = TextView(this).apply {
             text = "JARVIS CAN MAKE MISTAKES"
             textSize = 9f
@@ -224,10 +245,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(88, 112, 139))
         }
-        root.addView(
-            footer,
-            LinearLayout.LayoutParams(-1, dp(25))
-        )
+        root.addView(footer, LinearLayout.LayoutParams(-1, dp(25)))
 
         setContentView(root)
 
@@ -239,6 +257,8 @@ class MainActivity : Activity() {
                 false
             }
         }
+
+        setupSpeechRecognizer()
     }
 
     private fun sendMessage() {
@@ -247,72 +267,117 @@ class MainActivity : Activity() {
 
         addMessage("KAMU", message, true)
         input.text.clear()
+
         sendButton.isEnabled = false
+        micButton.isEnabled = false
         status.text = "●  JARVIS SEDANG BERPIKIR..."
         status.setTextColor(Color.rgb(255, 205, 90))
+
         addMessage("JARVIS", "Sedang memproses pesan...", false, true)
 
         executor.execute {
-            var answer: String
+            val answer: String
+
             try {
                 val connection =
-                    URL(apiUrl).openConnection() as HttpURLConnection
-
-                connection.requestMethod = "POST"
-                connection.connectTimeout = 20000
-                connection.readTimeout = 30000
-                connection.doOutput = true
-                connection.setRequestProperty(
-                    "Content-Type", "application/json; charset=UTF-8"
-                )
-                connection.setRequestProperty(
-                    "Accept", "application/json"
-                )
+                    (URL(apiUrl).openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        connectTimeout = 20000
+                        readTimeout = 30000
+                        doOutput = true
+                        setRequestProperty(
+                            "Content-Type",
+                            "application/json; charset=UTF-8"
+                        )
+                        setRequestProperty("Accept", "application/json")
+                    }
 
                 val payload = JSONObject()
                     .put("message", message)
                     .put("mode", "ramah")
                     .put("language", "id")
 
-                OutputStreamWriter(
-                    connection.outputStream, Charsets.UTF_8
-                ).use {
-                    it.write(payload.toString())
+                val code: Int
+                val response: String
+
+                try {
+                    OutputStreamWriter(
+                        connection.outputStream,
+                        Charsets.UTF_8
+                    ).use {
+                        it.write(payload.toString())
+                    }
+
+                    code = connection.responseCode
+
+                    val stream = if (code in 200..299) {
+                        connection.inputStream
+                    } else {
+                        connection.errorStream
+                    }
+
+                    response = if (stream != null) {
+                        BufferedReader(
+                            InputStreamReader(stream, Charsets.UTF_8)
+                        ).use { it.readText() }
+                    } else {
+                        ""
+                    }
+                } finally {
+                    connection.disconnect()
                 }
 
-                val code = connection.responseCode
-                val stream = if (code in 200..299) {
-                    connection.inputStream
-                } else {
-                    connection.errorStream
+                val json = try {
+                    JSONObject(response)
+                } catch (_: Exception) {
+                    JSONObject()
                 }
 
-                val response = BufferedReader(
-                    InputStreamReader(stream, Charsets.UTF_8)
-                ).use { it.readText() }
+                val reply = json.optString("reply", "")
 
-                connection.disconnect()
-
-                val json = JSONObject(response)
-                answer = json.optString("reply", "")
-
-                if (code !in 200..299 || answer.isBlank()) {
+                if (code !in 200..299 || reply.isBlank()) {
                     val detail = json.optString("error", "")
                     throw Exception(
-                        if (detail.isNotBlank()) detail
-                        else "Server merespons dengan kode $code"
+                        detail.ifBlank {
+                            "Server merespons dengan kode $code"
+                        }
                     )
                 }
+
+                reply
             } catch (e: Exception) {
-                answer = "Jarvis belum bisa terhubung ke AI. " +
+                "Jarvis belum bisa terhubung ke AI. " +
                     "Periksa koneksi internet dan backend Gemini kamu. " +
                     "Detail: ${e.message ?: "koneksi gagal"}"
+            }.also {
+                // Simpan hasil untuk ditampilkan di UI.
+            }
+
+            val finalAnswer = try {
+                val connection =
+                    (URL(apiUrl).openConnection() as HttpURLConnection)
+                connection.disconnect()
+                // Jawaban sebenarnya ditangani di blok request di atas.
+                ""
+            } catch (_: Exception) {
+                ""
             }
 
             runOnUiThread {
                 removeLoadingMessage()
                 addMessage("JARVIS", answer, false)
+
+                if (speakReplies && ttsReady) {
+                    tts?.speak(
+                        answer,
+                        TextToSpeech.QUEUE_FLUSH,
+                        null,
+                        "jarvis-reply"
+                    )
+                }
+
                 sendButton.isEnabled = true
+                micButton.isEnabled = true
                 status.text = "●  JARVIS SYSTEM"
                 status.setTextColor(cyan)
             }
@@ -355,18 +420,12 @@ class MainActivity : Activity() {
         wrapper.addView(label)
         wrapper.addView(
             bubble,
-            LinearLayout.LayoutParams(
-                -2, -2
-            ).apply {
+            LinearLayout.LayoutParams(-2, -2).apply {
                 topMargin = dp(4)
             }
         )
 
-        messages.addView(
-            wrapper,
-            LinearLayout.LayoutParams(-1, -2)
-        )
-
+        messages.addView(wrapper, LinearLayout.LayoutParams(-1, -2))
         scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
     }
 
@@ -377,6 +436,145 @@ class MainActivity : Activity() {
                 messages.removeViewAt(i)
                 return
             }
+        }
+    }
+
+    private fun setupSpeechRecognizer() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            micButton.isEnabled = false
+            micButton.text = "×"
+            return
+        }
+
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+
+        speechRecognizer?.setRecognitionListener(
+            object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    status.text = "●  SILAKAN BICARA..."
+                    status.setTextColor(cyan)
+                }
+
+                override fun onBeginningOfSpeech() {
+                    listening = true
+                }
+
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {
+                    listening = false
+                    micButton.text = "🎙"
+                }
+
+                override fun onError(error: Int) {
+                    listening = false
+                    micButton.text = "🎙"
+                    status.text = "●  JARVIS SYSTEM"
+                    status.setTextColor(cyan)
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Suara tidak terdeteksi. Coba lagi.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                override fun onResults(results: Bundle?) {
+                    listening = false
+                    micButton.text = "🎙"
+
+                    val texts = results?.getStringArrayList(
+                        SpeechRecognizer.RESULTS_RECOGNITION
+                    )
+                    val spoken = texts?.firstOrNull().orEmpty()
+
+                    if (spoken.isNotBlank()) {
+                        input.setText(spoken)
+                        input.setSelection(input.text.length)
+                        sendMessage()
+                    }
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            }
+        )
+    }
+
+    private fun toggleListening() {
+        if (listening) {
+            speechRecognizer?.stopListening()
+            listening = false
+            micButton.text = "🎙"
+            return
+        }
+
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                1001
+            )
+            return
+        }
+
+        if (speechRecognizer == null) {
+            setupSpeechRecognizer()
+        }
+
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            )
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "id-ID")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+
+        try {
+            speechRecognizer?.startListening(intent)
+            micButton.text = "■"
+        } catch (_: Exception) {
+            Toast.makeText(
+                this,
+                "Tidak dapat memulai pengenalan suara.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(
+            requestCode,
+            permissions,
+            grantResults
+        )
+
+        if (requestCode == 1001 &&
+            grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        ) {
+            toggleListening()
+        } else if (requestCode == 1001) {
+            Toast.makeText(
+                this,
+                "Izin mikrofon diperlukan untuk fitur suara.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    override fun onInit(statusCode: Int) {
+        if (statusCode == TextToSpeech.SUCCESS) {
+            val result = tts?.setLanguage(Locale("id", "ID"))
+            ttsReady =
+                result != TextToSpeech.LANG_MISSING_DATA &&
+                result != TextToSpeech.LANG_NOT_SUPPORTED
         }
     }
 
@@ -394,13 +592,11 @@ class MainActivity : Activity() {
         }
     }
 
-    
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
 
     private fun dp(value: Float): Float =
         value * resources.displayMetrics.density
-
 
     inner class OrbView : View(this@MainActivity) {
 
@@ -417,10 +613,10 @@ class MainActivity : Activity() {
             val cx = width / 2f
             val cy = height / 2f
             val t = SystemClock.uptimeMillis() / 1000f
-            val pulse = 0.92f + 0.08f * kotlin.math.sin(t * 2.2f)
+            val pulse =
+                0.92f + 0.08f * kotlin.math.sin(t * 2.2f)
             val radius = dp(53) * pulse
 
-            // Outer blue glow
             paint.style = Paint.Style.FILL
             paint.shader = RadialGradient(
                 cx, cy, dp(95).toFloat(),
@@ -435,33 +631,39 @@ class MainActivity : Activity() {
             canvas.drawCircle(cx, cy, dp(95).toFloat(), paint)
             paint.shader = null
 
-            // Rotating holographic rings
             canvas.save()
             canvas.rotate(t * 24f, cx, cy)
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = dp(1.4f).toFloat()
+            paint.strokeWidth = dp(1.4f)
             paint.color = Color.argb(190, 50, 215, 255)
-            bounds.set(cx - dp(76), cy - dp(24),
-                cx + dp(76), cy + dp(24))
+
+            bounds.set(
+                cx - dp(76), cy - dp(24),
+                cx + dp(76), cy + dp(24)
+            )
             canvas.drawArc(bounds, 0f, 300f, false, paint)
 
             paint.color = Color.argb(120, 70, 150, 255)
-            bounds.set(cx - dp(85), cy - dp(33),
-                cx + dp(85), cy + dp(33))
+            bounds.set(
+                cx - dp(85), cy - dp(33),
+                cx + dp(85), cy + dp(33)
+            )
             canvas.drawArc(bounds, 170f, 205f, false, paint)
             canvas.restore()
 
             canvas.save()
             canvas.rotate(-t * 35f, cx, cy)
-            paint.strokeWidth = dp(2).toFloat()
+            paint.strokeWidth = dp(2f)
             paint.color = Color.argb(150, 50, 215, 255)
-            bounds.set(cx - dp(68), cy - dp(68),
-                cx + dp(68), cy + dp(68))
+
+            bounds.set(
+                cx - dp(68), cy - dp(68),
+                cx + dp(68), cy + dp(68)
+            )
             canvas.drawArc(bounds, 205f, 105f, false, paint)
             canvas.drawArc(bounds, 20f, 55f, false, paint)
             canvas.restore()
 
-            // Main energy sphere
             paint.style = Paint.Style.FILL
             paint.shader = RadialGradient(
                 cx - radius * 0.28f,
@@ -480,24 +682,21 @@ class MainActivity : Activity() {
             canvas.drawCircle(cx, cy, radius, paint)
             paint.shader = null
 
-            // Fine luminous outline
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = dp(2).toFloat()
+            paint.strokeWidth = dp(2f)
             paint.color = Color.argb(220, 125, 245, 255)
             canvas.drawCircle(cx, cy, radius, paint)
 
-            // Small orbital particles
             paint.style = Paint.Style.FILL
             for (i in 0 until 6) {
                 val a = t * 0.8f + i * (Math.PI / 3.0)
-                val px = cx + kotlin.math.cos(a).toFloat() * dp(78)
-                val py = cy + kotlin.math.sin(a).toFloat() * dp(34)
-                paint.color = if (i % 2 == 0) {
-                    Color.WHITE
-                } else {
-                    cyan
-                }
-                canvas.drawCircle(px, py, dp(2).toFloat(), paint)
+                val px = cx +
+                    kotlin.math.cos(a).toFloat() * dp(78)
+                val py = cy +
+                    kotlin.math.sin(a).toFloat() * dp(34)
+
+                paint.color = if (i % 2 == 0) Color.WHITE else cyan
+                canvas.drawCircle(px, py, dp(2f), paint)
             }
 
             postInvalidateDelayed(33)
@@ -505,6 +704,10 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+        tts?.stop()
+        tts?.shutdown()
         executor.shutdownNow()
         super.onDestroy()
     }
