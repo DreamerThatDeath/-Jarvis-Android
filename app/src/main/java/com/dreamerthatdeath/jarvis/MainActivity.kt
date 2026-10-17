@@ -203,7 +203,7 @@ class MainActivity : Activity() {
         )
 
         val footer = TextView(this).apply {
-            text = "POWERED BY GEMINI  •  JARVIS AI"
+            text = "JARVIS CAN MAKE MISTAKES"
             textSize = 9f
             letterSpacing = 0.1f
             gravity = Gravity.CENTER
