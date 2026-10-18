@@ -496,49 +496,82 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         )
     }
 
-    private fun toggleListening() {
-        if (listening) {
-            speechRecognizer?.stopListening()
-            listening = false
-            micButton.text = "🎙"
-            return
-        }
-
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(
-                arrayOf(Manifest.permission.RECORD_AUDIO),
-                1001
-            )
-            return
-        }
-
-        if (speechRecognizer == null) {
-            setupSpeechRecognizer()
-        }
-
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-            )
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "id-ID")
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-        }
-
-        try {
-            speechRecognizer?.startListening(intent)
-            micButton.text = "■"
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Tidak dapat memulai pengenalan suara.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
+    
+private fun toggleListening() {
+    if (listening) {
+        speechRecognizer?.stopListening()
+        listening = false
+        micButton.text = "🎙"
+        return
     }
+
+    if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+        != PackageManager.PERMISSION_GRANTED
+    ) {
+        requestPermissions(
+            arrayOf(Manifest.permission.RECORD_AUDIO),
+            1001
+        )
+        return
+    }
+
+    if (speechRecognizer == null) {
+        setupSpeechRecognizer()
+    }
+
+    try {
+        val serviceIntent = Intent(
+            this,
+            JarvisVoiceService::class.java
+        )
+
+        if (android.os.Build.VERSION.SDK_INT >=
+            android.os.Build.VERSION_CODES.O
+        ) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
+    } catch (e: Exception) {
+        Toast.makeText(
+            this,
+            "Layanan Hey Jarvis gagal dimulai: ${e.message}",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    val speechIntent = Intent(
+        RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+    ).apply {
+        putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+        )
+        putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE,
+            "id-ID"
+        )
+        putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,
+            "id-ID"
+        )
+        putExtra(
+            RecognizerIntent.EXTRA_MAX_RESULTS,
+            1
+        )
+    }
+
+    try {
+        speechRecognizer?.startListening(speechIntent)
+        micButton.text = "■"
+    } catch (e: Exception) {
+        Toast.makeText(
+            this,
+            "Tidak dapat memulai pengenalan suara.",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+}
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
