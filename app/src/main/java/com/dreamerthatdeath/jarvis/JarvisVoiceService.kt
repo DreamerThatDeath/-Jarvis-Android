@@ -21,7 +21,8 @@ class JarvisVoiceService : Service() {
 
     private var detector: OpenWakeWord? = null
     private var isListening = false
-
+    private var wakeTriggered = false
+    
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
