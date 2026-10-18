@@ -287,8 +287,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
                 try {
                     connection.requestMethod = "POST"
-                    connection.connectTimeout = 20000
-                    connection.readTimeout = 30000
+                    connection.connectTimeout = 30000
+                    connection.readTimeout = 90000
                     connection.doOutput = true
 
                     connection.setRequestProperty(
