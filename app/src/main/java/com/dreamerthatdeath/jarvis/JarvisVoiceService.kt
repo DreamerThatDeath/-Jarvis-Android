@@ -73,8 +73,37 @@ class JarvisVoiceService : Service() {
                     .build()
 
                 detector?.start { score ->
-                    Log.i("JarvisWakeWord", "Hey Jarvis detected: $score")
-                    // Aksi setelah wake word akan ditambahkan pada langkah berikutnya.
+    if (wakeTriggered) {
+        return@start
+    }
+
+    wakeTriggered = true
+
+    Log.i("JarvisWakeWord", "Hey Jarvis detected: $score")
+
+    stopDetector()
+    stopForeground(STOP_FOREGROUND_REMOVE)
+    stopSelf()
+
+    val wakeIntent = Intent(
+        this,
+        MainActivity::class.java
+    ).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
+
+        putExtra("WAKE_WORD_TRIGGERED", true)
+    }
+
+    try {
+        startActivity(wakeIntent)
+    } catch (e: Exception) {
+        Log.e(
+            "JarvisWakeWord",
+            "Gagal membuka Jarvis AI",
+            e
+        )
+    }
                 }
 
                 isListening = true
