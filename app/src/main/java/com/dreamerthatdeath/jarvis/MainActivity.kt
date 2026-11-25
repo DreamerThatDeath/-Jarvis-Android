@@ -260,10 +260,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
         setupSpeechRecognizer()
     
-        if (intent.getBooleanExtra("WAKE_WORD_TRIGGERED", false)) {
-    window.decorView.postDelayed({
-        toggleListening()
-    }, 800)
+            if (intent.getBooleanExtra("WAKE_WORD_TRIGGERED", false)) {
+            window.decorView.postDelayed({
+                toggleListening()
+            }, 800)
+        }
     }
 
     private fun sendMessage() {
