@@ -5,12 +5,6 @@ plugins {
     id("com.google.gms.google-services")
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
-
 android {
     namespace = "com.dreamerthatdeath.jarvis"
     compileSdk = 35
@@ -28,6 +22,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
 
 
     buildFeatures {
@@ -38,8 +36,8 @@ android {
 dependencies {
     implementation("com.github.msnilsen:openwakeword-android:0.1.0")
 
-    implementation(platform("com.google.firebase:firebase-bom:35.2.0"))
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
-    implementation("com.google.android.gms:play-services-auth:21.5.1")
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
 }
