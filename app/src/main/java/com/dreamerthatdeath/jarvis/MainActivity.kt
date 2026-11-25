@@ -33,6 +33,11 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import org.json.JSONObject
+import org.json.JSONArray
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.FieldValue
+import java.util.UUID
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -63,6 +68,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var accountButton: Button
 
     private lateinit var firebaseAuth: FirebaseAuth
+    private val firestore by lazy { FirebaseFirestore.getInstance() }
+    private val chatItems = mutableListOf<HashMap<String, Any>>()
+    private var restoringHistory = false
     private lateinit var googleSignInClient: com.google.android.gms.auth.api.signin.GoogleSignInClient
 
     private var speechRecognizer: SpeechRecognizer? = null
@@ -162,11 +170,14 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         scroll.addView(messages)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        addMessage(
-            "JARVIS",
-            "Sistem siap. Halo! Apa yang bisa kubantu hari ini?",
-            false
-        )
+        restoreLocalHistory()
+        if (chatItems.isEmpty()) {
+            addMessage(
+                "JARVIS",
+                "Sistem siap. Halo! Apa yang bisa kubantu hari ini?",
+                false
+            )
+        }
 
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -328,6 +339,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                             updateAccountButton()
                             val name = firebaseAuth.currentUser?.displayName ?: "pengguna"
                             Toast.makeText(this, "Login berhasil. Halo, $name!", Toast.LENGTH_LONG).show()
+                            syncChatHistory()
                         } else {
                             Toast.makeText(this, "Login Firebase gagal: ${result.exception?.localizedMessage}", Toast.LENGTH_LONG).show()
                         }
@@ -497,7 +509,107 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         )
 
         messages.addView(wrapper, LinearLayout.LayoutParams(-1, -2))
+        if (!loading && !restoringHistory) {
+            val item = hashMapOf<String, Any>(
+                "id" to UUID.randomUUID().toString(),
+                "sender" to sender,
+                "content" to content,
+                "isUser" to isUser
+            )
+            chatItems.add(item)
+            if (chatItems.size > 100) chatItems.removeAt(0)
+            persistChatHistory()
+            if (firebaseAuth.currentUser != null) uploadChatHistory()
+        }
         scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun restoreLocalHistory() {
+        val raw = getSharedPreferences("jarvis_chat", MODE_PRIVATE)
+            .getString("messages", null) ?: return
+        try {
+            val array = JSONArray(raw)
+            restoringHistory = true
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                val item = hashMapOf<String, Any>(
+                    "id" to obj.optString("id", UUID.randomUUID().toString()),
+                    "sender" to obj.optString("sender", "JARVIS"),
+                    "content" to obj.optString("content", ""),
+                    "isUser" to obj.optBoolean("isUser", false)
+                )
+                if ((item["content"] as String).isNotBlank()) {
+                    chatItems.add(item)
+                    addMessage(item["sender"] as String, item["content"] as String, item["isUser"] as Boolean)
+                }
+            }
+        } catch (_: Exception) {
+            chatItems.clear()
+        } finally {
+            restoringHistory = false
+        }
+    }
+
+    private fun persistChatHistory() {
+        val array = JSONArray()
+        chatItems.takeLast(100).forEach { item -> array.put(JSONObject(item)) }
+        getSharedPreferences("jarvis_chat", MODE_PRIVATE)
+            .edit().putString("messages", array.toString()).apply()
+    }
+
+    private fun syncChatHistory() {
+        val user = firebaseAuth.currentUser ?: return
+        firestore.collection("users").document(user.uid)
+            .collection("data").document("chat")
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val cloudItems = snapshot.get("messages") as? List<*>
+                if (cloudItems.isNullOrEmpty()) {
+                    uploadChatHistory()
+                    return@addOnSuccessListener
+                }
+                val merged = LinkedHashMap<String, HashMap<String, Any>>()
+                for (raw in cloudItems) {
+                    val map = raw as? Map<*, *> ?: continue
+                    val id = map["id"] as? String ?: continue
+                    val sender = map["sender"] as? String ?: continue
+                    val content = map["content"] as? String ?: continue
+                    val isUser = map["isUser"] as? Boolean ?: false
+                    merged[id] = hashMapOf("id" to id, "sender" to sender, "content" to content, "isUser" to isUser)
+                }
+                chatItems.forEach { item -> merged[item["id"] as String] = item }
+                chatItems.clear()
+                chatItems.addAll(merged.values.takeLast(100))
+                renderChatHistory()
+                persistChatHistory()
+                uploadChatHistory()
+            }
+            .addOnFailureListener { error ->
+                Toast.makeText(this, "Gagal memuat chat cloud: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun renderChatHistory() {
+        restoringHistory = true
+        messages.removeAllViews()
+        chatItems.forEach { item ->
+            addMessage(item["sender"] as String, item["content"] as String, item["isUser"] as Boolean)
+        }
+        restoringHistory = false
+    }
+
+    private fun uploadChatHistory() {
+        val user = firebaseAuth.currentUser ?: return
+        val payload = hashMapOf<String, Any>(
+            "messages" to chatItems.takeLast(100),
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+        firestore.collection("users").document(user.uid)
+            .collection("data").document("chat")
+            .set(payload, SetOptions.merge())
+            .addOnFailureListener { error ->
+                Toast.makeText(this, "Gagal menyimpan chat cloud: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
     }
 
     private fun removeLoadingMessage() {
