@@ -1,5 +1,6 @@
 name: Build Jarvis Android APK
 
+# Verify that the debug signing key survives between workflow runs.
 on:
   workflow_dispatch:
   push:
