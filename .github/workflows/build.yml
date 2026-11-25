@@ -1,4 +1,3 @@
-
 name: Build Jarvis Android APK
 
 on:
@@ -29,6 +28,12 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Cache Android debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: jarvis-android-debug-keystore-v1
+
       - name: Check AndroidManifest XML
         run: |
           python3 - <<'PY'
@@ -42,10 +47,9 @@ jobs:
           print("AndroidManifest.xml valid")
           PY
 
-
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace --info
-        
+
       - name: Print debug APK SHA-1 for Firebase
         run: |
           echo "Debug APK signing certificate fingerprint:"
