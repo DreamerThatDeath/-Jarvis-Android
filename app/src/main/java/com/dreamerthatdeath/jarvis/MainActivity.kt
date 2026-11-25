@@ -28,6 +28,10 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -56,6 +60,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var status: TextView
     private lateinit var micButton: Button
     private lateinit var speakButton: Button
+    private lateinit var accountButton: Button
+
+    private lateinit var firebaseAuth: FirebaseAuth
+    private lateinit var googleSignInClient: com.google.android.gms.auth.api.signin.GoogleSignInClient
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
@@ -70,6 +78,13 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         window.navigationBarColor = bg
 
         tts = TextToSpeech(this, this)
+        firebaseAuth = FirebaseAuth.getInstance()
+
+        val googleOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+        googleSignInClient = GoogleSignIn.getClient(this, googleOptions)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -236,6 +251,21 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 topMargin = dp(5)
             }
         )
+
+        accountButton = Button(this).apply {
+            textSize = 11f
+            setTextColor(cyan)
+            background = rounded(panel, 12)
+            setOnClickListener { onAccountButtonClicked() }
+        }
+        controls.addView(
+            accountButton,
+            LinearLayout.LayoutParams(-2, dp(40)).apply {
+                leftMargin = dp(8)
+                topMargin = dp(5)
+            }
+        )
+        updateAccountButton()
         root.addView(controls)
 
         val footer = TextView(this).apply {
@@ -264,6 +294,47 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             window.decorView.postDelayed({
                 toggleListening()
             }, 800)
+        }
+    }
+
+    private fun updateAccountButton() {
+        val user = firebaseAuth.currentUser
+        accountButton.text = if (user == null) "Google: Sign in" else "Google: Sign out"
+    }
+
+    private fun onAccountButtonClicked() {
+        if (firebaseAuth.currentUser != null) {
+            firebaseAuth.signOut()
+            googleSignInClient.signOut().addOnCompleteListener {
+                updateAccountButton()
+                Toast.makeText(this, "Berhasil keluar dari akun Google.", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            startActivityForResult(googleSignInClient.signInIntent, 9001)
+        }
+    }
+
+    @Deprecated("Google Sign-In activity result callback")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 9001) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+            try {
+                val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                val credential = GoogleAuthProvider.getCredential(account.idToken, null)
+                firebaseAuth.signInWithCredential(credential)
+                    .addOnCompleteListener(this) { result ->
+                        if (result.isSuccessful) {
+                            updateAccountButton()
+                            val name = firebaseAuth.currentUser?.displayName ?: "pengguna"
+                            Toast.makeText(this, "Login berhasil. Halo, $name!", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(this, "Login Firebase gagal: ${result.exception?.localizedMessage}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+            } catch (e: Exception) {
+                Toast.makeText(this, "Google Sign-In gagal: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
