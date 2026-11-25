@@ -53,8 +53,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private val cyan = Color.rgb(50, 215, 255)
     private val white = Color.rgb(235, 246, 255)
 
+    // Shared Cloudflare Worker backend used by the Jarvis AI website.
     private val apiUrl =
-        "https://jarvis-ai-backend-iota.vercel.app/api/chat"
+        "https://jarvis-ai-backend.dreamerthatdie.workers.dev/"
 
     private val executor = Executors.newSingleThreadExecutor()
 
@@ -389,10 +390,22 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "application/json"
                     )
 
+                    val history = JSONArray()
+                    chatItems.dropLast(1).takeLast(12).forEach { item ->
+                        val content = item["content"] as? String ?: return@forEach
+                        val role = if (item["isUser"] == true) "user" else "assistant"
+                        if (content.isNotBlank()) {
+                            history.put(JSONObject().put("role", role).put("text", content))
+                        }
+                    }
+
                     val payload = JSONObject()
                         .put("message", message)
                         .put("mode", "ramah")
                         .put("language", "id")
+                        .put("model", "gemini-3.8-flash")
+                        .put("generate_media", false)
+                        .put("history", history)
 
                     OutputStreamWriter(
                         connection.outputStream,
