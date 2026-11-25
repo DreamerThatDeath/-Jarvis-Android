@@ -552,7 +552,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun persistChatHistory() {
         val array = JSONArray()
-        chatItems.takeLast(100).forEach { item -> array.put(JSONObject(item)) }
+        chatItems.subList((chatItems.size - 100).coerceAtLeast(0), chatItems.size).forEach { item -> array.put(JSONObject(item)) }
         getSharedPreferences("jarvis_chat", MODE_PRIVATE)
             .edit().putString("messages", array.toString()).apply()
     }
@@ -579,7 +579,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 }
                 chatItems.forEach { item -> merged[item["id"] as String] = item }
                 chatItems.clear()
-                chatItems.addAll(merged.values.takeLast(100))
+                chatItems.addAll(merged.values.toList().let { values -> values.subList((values.size - 100).coerceAtLeast(0), values.size) })
                 renderChatHistory()
                 persistChatHistory()
                 uploadChatHistory()
@@ -601,7 +601,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun uploadChatHistory() {
         val user = firebaseAuth.currentUser ?: return
         val payload = hashMapOf<String, Any>(
-            "messages" to chatItems.takeLast(100),
+            "messages" to chatItems.subList((chatItems.size - 100).coerceAtLeast(0), chatItems.size),
             "updatedAt" to FieldValue.serverTimestamp()
         )
         firestore.collection("users").document(user.uid)
