@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "10396074485",
+    "project_id": "jarvis-ai-49df9",
+    "storage_bucket": "jarvis-ai-49df9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:10396074485:android:57075b21ba9769eba0e0bc",
+        "android_client_info": {
+          "package_name": "com.dreamerthatdeath.jarvis"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "10396074485-bijnv8rnv79itf5bbs5982bi0ksj047f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dreamerthatdeath.jarvis",
+            "certificate_hash": "e43230497ae1c2d5414f3c58ce364e65f8a09d7e"
+          }
+        },
+        {
+          "client_id": "10396074485-iu0en551hou770pl2qh827dlcpbjukd2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD34eIp5Pz-VHXP6UXF41R3pkmYQi98TZY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "10396074485-iu0en551hou770pl2qh827dlcpbjukd2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
